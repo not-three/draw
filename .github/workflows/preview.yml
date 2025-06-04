@@ -44,21 +44,14 @@ jobs:
 
       - name: Generate static files
         if: github.event.action != 'closed'
-        run: NUXT_APP_BASE_URL=/pr-preview/pr-${{ github.event.number }}/ pnpm generate
-
-      - name: Updating config.json for not-th.re public
-        if: github.event.action != 'closed'
-        run: >
-          echo "{\"baseURL\": \"https://api.not-th.re/\", \"termsURL\":
-          \"https://scolasti.co/go/privacy\", \"pullRequest\":
-          \"https://github.com/not-three/ui/pull/${{ github.event.number }}\"}" > .output/public/config.json
+        run: pnpm build
 
       - name: Deploy preview
         uses: rossjrw/pr-preview-action@v1
         with:
           preview-branch: html-previews
-          source-dir: .output/public
-          pages-base-url: beta.not-th.re
+          source-dir: dist
+          pages-base-url: beta-draw.not-th.re
 
   dependabot:
     runs-on: ubuntu-latest

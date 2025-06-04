@@ -25,7 +25,7 @@ jobs:
       - uses: mr-smithers-excellent/docker-build-push@v6
         with:
           tags: latest,${{ github.sha }},${{ github.ref_name }}
-          image: ui
+          image: draw
           registry: ghcr.io
           directory: ./
           dockerfile: ./Dockerfile
@@ -47,10 +47,10 @@ jobs:
         run: pnpm install
 
       - name: Generate static files
-        run: pnpm generate
+        run: pnpm build
 
       - name: Zip client bundle
-        run: zip -r client-bundle.zip .output/public
+        run: zip -r client-bundle.zip dist
 
       - name: Upload client bundle to release
         uses: softprops/action-gh-release@v2
@@ -58,15 +58,10 @@ jobs:
           files: client-bundle.zip
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Updating config.json for not-th.re public
-        run: >
-          echo "{\"baseURL\": \"https://api.not-th.re/\", \"termsURL\":
-          \"https://scolasti.co/go/privacy\"}" > .output/public/config.json
-
       - name: Upload client bundle to cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .output/public/ --project-name=not-three --commit-dirty=true --branch=main
+          command: pages deploy .output/public/ --project-name=not-three-draw --commit-dirty=true --branch=main
           packageManager: pnpm

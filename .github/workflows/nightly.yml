@@ -30,7 +30,7 @@ jobs:
       - uses: mr-smithers-excellent/docker-build-push@v6
         if: github.event_name != 'workflow_dispatch'
         with:
-          image: ui
+          image: draw
           tags: nightly,${{ github.sha }}
           registry: ghcr.io
           directory: ./
@@ -51,14 +51,14 @@ jobs:
         run: pnpm install
 
       - name: Generate static files
-        run: pnpm generate
+        run: pnpm build
 
       - name: Upload client bundle
         uses: actions/upload-artifact@v4
         with:
           name: client-bundle
           path: |
-            .output/public
+            dist
 
   publish:
     runs-on: ubuntu-latest
@@ -69,17 +69,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: client-bundle
-          path: .output/public
-
-      - name: Updating config.json for not-th.re public
-        run: >
-          echo "{\"baseURL\": \"https://api.not-th.re/\", \"termsURL\":
-          \"https://scolasti.co/go/privacy\"}" > .output/public/config.json
+          path: dist
 
       - name: Upload client bundle to cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .output/public/ --project-name=not-three --commit-dirty=true --branch=main
+          command: pages deploy dist/ --project-name=not-three-draw --commit-dirty=true --branch=main
           packageManager: npm
