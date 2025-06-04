@@ -1,0 +1,9 @@
+# This file is for local development only.
+# It is not used, nor recommended, for production.
+
+services:
+  app:
+    image: undefined
+    build:
+      context: .
+      dockerfile: Dockerfile

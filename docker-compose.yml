@@ -1,0 +1,9 @@
+# Simple example of an !3 draw deployment using docker-compose
+# Please note: There is also a more advanced example in the main repository available
+# https://github.com/not-three/main#deployment
+
+services:
+  app:
+    image: ghcr.io/not-three/draw:latest
+    ports:
+      - 4500:80
