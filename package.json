@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "prepare": "cp -r node_modules/@excalidraw/excalidraw/dist/prod/fonts ./public/"
+    "prepare": "cp -r ./node_modules/@excalidraw/excalidraw/dist/prod/fonts ./public/"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",
@@ -27,5 +27,6 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"
-  }
+  },
+  "packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"
 }
