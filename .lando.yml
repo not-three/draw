@@ -1,0 +1,21 @@
+name: not-three-draw
+
+services:
+  ui:
+    type: node:20
+    port: 4500
+    globals:
+      pnpm: latest
+    build:
+      - pnpm install
+    command: pnpm dev
+    scanner:
+      okCodes: [200]
+
+proxy:
+  ui:
+    - not-three-draw.local.scolastico.me:4500
+
+tooling:
+  pnpm:
+    service: ui
