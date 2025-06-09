@@ -63,5 +63,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy .output/public/ --project-name=not-three-draw --commit-dirty=true --branch=main
+          command: pages deploy dist/ --project-name=not-three-draw --commit-dirty=true --branch=main
           packageManager: pnpm
