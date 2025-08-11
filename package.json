@@ -16,17 +16,17 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.32.0",
+    "@eslint/js": "^9.33.0",
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
-    "@vitejs/plugin-react": "^4.7.0",
-    "eslint": "^9.32.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.3.0",
     "typescript": "~5.9.2",
-    "typescript-eslint": "^8.38.0",
-    "vite": "^7.0.6"
+    "typescript-eslint": "^8.39.0",
+    "vite": "^7.1.1"
   },
   "packageManager": "pnpm@10.8.0+sha512.0e82714d1b5b43c74610193cb20734897c1d00de89d0e18420aebc5977fa13d780a9cb05734624e81ebd81cc876cd464794850641c48b9544326b5622ca29971"
 }
