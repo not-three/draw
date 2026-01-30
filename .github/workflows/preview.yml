@@ -33,7 +33,7 @@ jobs:
 
       - name: Label the PR
         if: github.event.action != 'closed'
-        uses: actions/labeler@v5
+        uses: actions/labeler@v6
 
       - name: Install dependencies
         if: github.event.action != 'closed'
