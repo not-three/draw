@@ -1,5 +1,6 @@
 import { Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { useEffect, useRef } from "react";
 
 type AppProps = {
   initialElements?: ExcalidrawElement[];
@@ -7,6 +8,25 @@ type AppProps = {
 };
 
 function App({ initialElements = [], isReadonly = false }: AppProps) {
+  const elementsRef = useRef<readonly ExcalidrawElement[]>(initialElements);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+        event.preventDefault();
+        window.parent.postMessage({
+          type: "not3/draw/save",
+          payload: elementsRef.current,
+        }, "*");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   return (
     <>
       <div style={{ height: "100%", width: "100%" }}>
@@ -31,6 +51,7 @@ function App({ initialElements = [], isReadonly = false }: AppProps) {
           viewModeEnabled={isReadonly}
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           onChange={(excalidrawElements, _appState, _files) => {
+            elementsRef.current = excalidrawElements;
             window.parent.postMessage({
               type: "not3/draw/change",
               payload: excalidrawElements,
