@@ -11,6 +11,10 @@ function App({ initialElements = [], isReadonly = false }: AppProps) {
   const elementsRef = useRef<readonly ExcalidrawElement[]>(initialElements);
 
   useEffect(() => {
+    elementsRef.current = initialElements;
+  }, [initialElements]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
