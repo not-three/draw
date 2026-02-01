@@ -12,7 +12,7 @@ function App({ initialElements = [], isReadonly = false }: AppProps) {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         window.parent.postMessage({
           type: "not3/draw/save",
