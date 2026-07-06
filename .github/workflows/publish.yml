@@ -22,7 +22,7 @@ jobs:
           username: ${{github.actor}}
           password: ${{secrets.GITHUB_TOKEN}}
 
-      - uses: mr-smithers-excellent/docker-build-push@v6
+      - uses: mr-smithers-excellent/docker-build-push@v7
         with:
           tags: latest,${{ github.sha }},${{ github.ref_name }}
           image: draw
