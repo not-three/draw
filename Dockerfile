@@ -1,4 +1,4 @@
-FROM node:25-alpine AS build-stage
+FROM node:26-alpine AS build-stage
 
 WORKDIR /app
 RUN npm i -g pnpm
