@@ -5,6 +5,9 @@ import { diff, reconcile } from "./collab";
 const element = (id: string, version: number, versionNonce: number, isDeleted = false) =>
   ({ id, version, versionNonce, isDeleted }) as ExcalidrawElement;
 
+const indexedElement = (id: string, index: string, version = 1, versionNonce = 1) =>
+  ({ id, index, version, versionNonce, isDeleted: false }) as ExcalidrawElement;
+
 describe("reconcile", () => {
   it("keeps the higher version", () => {
     expect(reconcile([element("a", 3, 9)], [element("a", 2, 1)])).toEqual([element("a", 3, 9)]);
@@ -23,13 +26,20 @@ describe("reconcile", () => {
   });
 
   it("converges regardless of arrival order", () => {
-    const first = [element("a", 2, 5), element("b", 1, 1)];
-    const second = [element("a", 2, 3), element("c", 1, 1)];
+    const first = [indexedElement("a", "a0", 2, 5), indexedElement("b", "a1")];
+    const second = [indexedElement("a", "a0", 2, 3), indexedElement("c", "a2")];
     expect(reconcile(first, second)).toEqual(reconcile(second, first));
   });
 
   it("preserves a newer local edit when remote input arrives", () => {
     expect(reconcile([element("a", 5, 4)], [element("a", 4, 1)])).toEqual([element("a", 5, 4)]);
+  });
+
+  it("preserves scene stacking order when element IDs sort differently", () => {
+    const back = indexedElement("z", "a0");
+    const front = indexedElement("a", "a1");
+    const updatedFront = indexedElement("a", "a1", 2);
+    expect(reconcile([back, front], [updatedFront])).toEqual([back, updatedFront]);
   });
 });
 

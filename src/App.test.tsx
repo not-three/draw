@@ -18,6 +18,7 @@ const editor = vi.hoisted(() => ({
 }));
 
 vi.mock("@excalidraw/excalidraw", () => ({
+  CaptureUpdateAction: { NEVER: "NEVER" },
   Excalidraw: (props: NonNullable<typeof editor.props>) => {
     editor.props = props;
     const api = {
@@ -74,6 +75,7 @@ describe("cowork bridge", () => {
     message("collab/elements", { elements: [element("local", 3), element("remote", 1)] });
     expect(editor.updateScene).toHaveBeenCalledWith(expect.objectContaining({
       elements: [element("local", 5), element("remote", 1)],
+      captureUpdate: "NEVER",
     }));
   });
 
@@ -86,6 +88,7 @@ describe("cowork bridge", () => {
     act(() => editor.props?.excalidrawAPI(editor.api));
     expect(editor.updateScene).toHaveBeenCalledWith(expect.objectContaining({
       elements: [element("remote", 1)],
+      captureUpdate: "NEVER",
     }));
   });
 

@@ -1,4 +1,4 @@
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { CaptureUpdateAction, Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -103,7 +103,10 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
           // Remote elements belong to the delta baseline, so updateScene's
           // onChange callback cannot send them back as local edits.
           emittedRef.current = reconcile(emittedRef.current, payload.elements);
-          if (diff(live, merged).length > 0) apiRef.current?.updateScene({ elements: merged });
+          if (diff(live, merged).length > 0) apiRef.current?.updateScene({
+            elements: merged,
+            captureUpdate: CaptureUpdateAction.NEVER,
+          });
           break;
         }
         case "not3/draw/collab/pointers": {
@@ -167,7 +170,10 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
           const live = api.getSceneElementsIncludingDeleted();
           const merged = reconcile(live, elementsRef.current);
           elementsRef.current = merged;
-          if (diff(live, merged).length > 0) api.updateScene({ elements: merged });
+          if (diff(live, merged).length > 0) api.updateScene({
+            elements: merged,
+            captureUpdate: CaptureUpdateAction.NEVER,
+          });
           if (diff(emittedRef.current, merged).length > 0) queueDelta();
         }}
         isCollaborating={isCollaborating}
