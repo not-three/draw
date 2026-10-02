@@ -161,7 +161,15 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
       }}
     >
       <Excalidraw
-        excalidrawAPI={(api) => { apiRef.current = api; }}
+        excalidrawAPI={(api) => {
+          apiRef.current = api;
+          if (!collabRef.current) return;
+          const live = api.getSceneElementsIncludingDeleted();
+          const merged = reconcile(live, elementsRef.current);
+          elementsRef.current = merged;
+          if (diff(live, merged).length > 0) api.updateScene({ elements: merged });
+          if (diff(emittedRef.current, merged).length > 0) queueDelta();
+        }}
         isCollaborating={isCollaborating}
         libraryReturnUrl="https://example.com"
         UIOptions={{

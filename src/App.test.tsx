@@ -12,13 +12,15 @@ const editor = vi.hoisted(() => ({
   },
   scene: [] as ExcalidrawElement[],
   echoOnUpdate: false,
+  deferApi: false,
+  api: null as unknown,
   updateScene: vi.fn(),
 }));
 
 vi.mock("@excalidraw/excalidraw", () => ({
   Excalidraw: (props: NonNullable<typeof editor.props>) => {
     editor.props = props;
-    props.excalidrawAPI({
+    const api = {
       getSceneElementsIncludingDeleted: () => editor.scene,
       updateScene: (update: { elements?: ExcalidrawElement[]; collaborators?: Map<string, unknown> }) => {
         editor.updateScene(update);
@@ -27,7 +29,9 @@ vi.mock("@excalidraw/excalidraw", () => ({
           if (editor.echoOnUpdate) editor.props?.onChange(update.elements, { selectedElementIds: {} });
         }
       },
-    });
+    };
+    editor.api = api;
+    if (!editor.deferApi) props.excalidrawAPI(api);
     return null;
   },
 }));
@@ -50,6 +54,8 @@ beforeEach(() => {
   editor.scene = [];
   editor.props = null;
   editor.echoOnUpdate = false;
+  editor.deferApi = false;
+  editor.api = null;
   editor.updateScene.mockClear();
   vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
 });
@@ -68,6 +74,18 @@ describe("cowork bridge", () => {
     message("collab/elements", { elements: [element("local", 3), element("remote", 1)] });
     expect(editor.updateScene).toHaveBeenCalledWith(expect.objectContaining({
       elements: [element("local", 5), element("remote", 1)],
+    }));
+  });
+
+  it("applies queued remote elements when the editor API becomes available", () => {
+    editor.deferApi = true;
+    render(<App />);
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    message("collab/elements", { elements: [element("remote", 1)] });
+    expect(editor.updateScene).not.toHaveBeenCalled();
+    act(() => editor.props?.excalidrawAPI(editor.api));
+    expect(editor.updateScene).toHaveBeenCalledWith(expect.objectContaining({
+      elements: [element("remote", 1)],
     }));
   });
 
