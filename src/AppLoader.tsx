@@ -19,6 +19,7 @@ export default function AppLoader() {
     }, 5000);
 
     function handleContact(event: MessageEvent) {
+      if (event.source !== window.parent) return;
       if (typeof event.data !== "object") return;
       if (event.data.type !== "not3/draw/init") return;
       contacted = true;
