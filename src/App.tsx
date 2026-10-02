@@ -1,6 +1,6 @@
 import { CaptureUpdateAction, Excalidraw } from "@excalidraw/excalidraw";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import type { ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
+import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { diff, reconcile } from "./collab";
 
@@ -23,6 +23,7 @@ const EMPTY_ELEMENTS: ExcalidrawElement[] = [];
 
 function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const collaboratorsRef = useRef<Map<SocketId, Collaborator> | null>(null);
   const elementsRef = useRef<readonly ExcalidrawElement[]>(initialElements);
   const emittedRef = useRef<readonly ExcalidrawElement[]>(initialElements);
   const collabRef = useRef(false);
@@ -89,6 +90,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
           if (!payload?.self || typeof payload.self.id !== "string") return;
           clearTimers();
           collabRef.current = true;
+          collaboratorsRef.current = null;
           setIsCollaborating(true);
           elementsRef.current = currentScene();
           emittedRef.current = elementsRef.current;
@@ -111,12 +113,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
         }
         case "not3/draw/collab/pointers": {
           if (!collabRef.current || !Array.isArray(payload?.peers)) return;
-          const collaborators = new Map<SocketId, {
-            username: string;
-            color: { background: string; stroke: string };
-            pointer?: { x: number; y: number; tool: "pointer" };
-            selectedElementIds: Record<string, true>;
-          }>();
+          const collaborators = new Map<SocketId, Collaborator>();
           for (const peer of payload.peers as Peer[]) {
             if (typeof peer.id !== "string" || !Array.isArray(peer.selected)) continue;
             collaborators.set(peer.id as SocketId, {
@@ -126,6 +123,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
               selectedElementIds: Object.fromEntries(peer.selected.map((id) => [id, true as const])),
             });
           }
+          collaboratorsRef.current = collaborators;
           apiRef.current?.updateScene({ collaborators });
           break;
         }
@@ -137,6 +135,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
         }
         case "not3/draw/collab/stop": {
           collabRef.current = false;
+          collaboratorsRef.current = null;
           setIsCollaborating(false);
           clearTimers();
           apiRef.current?.updateScene({ collaborators: new Map() });
@@ -174,6 +173,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
             elements: merged,
             captureUpdate: CaptureUpdateAction.NEVER,
           });
+          if (collaboratorsRef.current) api.updateScene({ collaborators: collaboratorsRef.current });
           if (diff(emittedRef.current, merged).length > 0) queueDelta();
         }}
         isCollaborating={isCollaborating}

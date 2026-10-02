@@ -92,6 +92,36 @@ describe("cowork bridge", () => {
     }));
   });
 
+  it("applies queued collaborator pointers when the editor API becomes available", () => {
+    editor.deferApi = true;
+    render(<App />);
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    message("collab/pointers", { peers: [{
+      id: "peer", name: "Ada", color: "#f00", pointer: { x: 12, y: 23 }, selected: ["shape"],
+    }] });
+    expect(editor.updateScene).not.toHaveBeenCalled();
+    act(() => editor.props?.excalidrawAPI(editor.api));
+    const update = editor.updateScene.mock.calls.find(([value]) => value.collaborators)?.[0];
+    expect(update.collaborators.get("peer")).toMatchObject({
+      username: "Ada", color: { background: "#f00", stroke: "#f00" },
+      pointer: { x: 12, y: 23, tool: "pointer" },
+      selectedElementIds: { shape: true },
+    });
+  });
+
+  it("does not replay pointers from a stopped session", () => {
+    editor.deferApi = true;
+    render(<App />);
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    message("collab/pointers", { peers: [{
+      id: "peer", name: "Ada", color: "#f00", pointer: { x: 12, y: 23 }, selected: [],
+    }] });
+    message("collab/stop");
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    act(() => editor.props?.excalidrawAPI(editor.api));
+    expect(editor.updateScene.mock.calls.some(([value]) => value.collaborators?.has("peer"))).toBe(false);
+  });
+
   it("sets named, colored remote collaborators", () => {
     render(<App />);
     message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
