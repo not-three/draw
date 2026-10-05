@@ -3,9 +3,11 @@ import LoadingSpinner from "./LoadingSpinner";
 import ErrorComponent from "./ErrorComponent";
 import App from "./App";
 import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
+import { isKeyEnable } from "./keys";
 import "@excalidraw/excalidraw/index.css";
 
 export default function AppLoader() {
+  const [earlyKeyEnable, setEarlyKeyEnable] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [initData, setInitData] = useState<{
     content: ExcalidrawElement[],
@@ -19,6 +21,7 @@ export default function AppLoader() {
     }, 5000);
 
     function handleContact(event: MessageEvent) {
+      if (isKeyEnable(event)) setEarlyKeyEnable(true);
       if (event.source !== window.parent) return;
       if (typeof event.data !== "object") return;
       if (event.data.type !== "not3/draw/init") return;
@@ -41,5 +44,5 @@ export default function AppLoader() {
 
   if (status === "loading") return <LoadingSpinner />;
   if (status === "error") return <ErrorComponent />;
-  return <App initialElements={initData.content} isReadonly={initData.readonly} />;
+  return <App initialElements={initData.content} isReadonly={initData.readonly} keysEnabled={earlyKeyEnable} />;
 }

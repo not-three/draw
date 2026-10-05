@@ -3,10 +3,12 @@ import type { ExcalidrawElement } from "@excalidraw/excalidraw/element/types";
 import type { Collaborator, ExcalidrawImperativeAPI, SocketId } from "@excalidraw/excalidraw/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { diff, reconcile } from "./collab";
+import { installDrawKeys } from "./keys";
 
 type AppProps = {
   initialElements?: ExcalidrawElement[];
   isReadonly?: boolean;
+  keysEnabled?: boolean;
 };
 
 type Peer = {
@@ -21,8 +23,10 @@ type Pointer = { pointer: { x: number; y: number } | null; selected: string[] };
 
 const EMPTY_ELEMENTS: ExcalidrawElement[] = [];
 
-function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps) {
+function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false, keysEnabled = false }: AppProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const initialKeysEnabled = useRef(keysEnabled);
   const collaboratorsRef = useRef<Map<SocketId, Collaborator> | null>(null);
   const elementsRef = useRef<readonly ExcalidrawElement[]>(initialElements);
   const emittedRef = useRef<readonly ExcalidrawElement[]>(initialElements);
@@ -75,13 +79,6 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
   }, [initialElements]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        post("save", elementsRef.current);
-      }
-    };
-
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== window.parent || !event.data || typeof event.data !== "object") return;
       const { type, payload } = event.data;
@@ -144,17 +141,21 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false }: AppProps)
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("message", handleMessage);
     return () => {
       clearTimers();
-      window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("message", handleMessage);
     };
   }, [clearTimers, currentScene, post]);
 
+  useEffect(() => installDrawKeys(
+    containerRef.current!, () => apiRef.current, () => post("save", elementsRef.current),
+    initialKeysEnabled.current,
+  ), [post]);
+
   return (
     <div
+      ref={containerRef}
       style={{ height: "100%", width: "100%" }}
       onPointerLeave={() => {
         if (!collabRef.current) return;
