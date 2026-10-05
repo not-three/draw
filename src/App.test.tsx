@@ -15,6 +15,11 @@ const editor = vi.hoisted(() => ({
   deferApi: false,
   api: null as unknown,
   updateScene: vi.fn(),
+  setActiveTool: vi.fn(),
+  scrollToContent: vi.fn(),
+  getAppState: vi.fn(),
+  excalidrawKeydown: vi.fn(),
+  appState: { zoom: { value: 1 }, gridModeEnabled: false, theme: "dark" },
 }));
 
 vi.mock("@excalidraw/excalidraw", () => ({
@@ -30,10 +35,16 @@ vi.mock("@excalidraw/excalidraw", () => ({
           if (editor.echoOnUpdate) editor.props?.onChange(update.elements, { selectedElementIds: {} });
         }
       },
+      setActiveTool: editor.setActiveTool,
+      scrollToContent: editor.scrollToContent,
+      getAppState: () => {
+        editor.getAppState();
+        return editor.appState;
+      },
     };
     editor.api = api;
     if (!editor.deferApi) props.excalidrawAPI(api);
-    return null;
+    return <div className="excalidraw-container" onKeyDown={(event) => editor.excalidrawKeydown(event.nativeEvent)} />;
   },
 }));
 
@@ -58,8 +69,43 @@ beforeEach(() => {
   editor.deferApi = false;
   editor.api = null;
   editor.updateScene.mockClear();
+  editor.setActiveTool.mockClear();
+  editor.scrollToContent.mockClear();
+  editor.getAppState.mockClear();
+  editor.excalidrawKeydown.mockClear();
+  editor.appState = { zoom: { value: 1 }, gridModeEnabled: false, theme: "dark" };
   vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
 });
+
+function nativeKey(options: Partial<KeyboardEvent> & { key: string; target?: EventTarget | null }) {
+  const event = {
+    key: options.key,
+    code: options.code ?? `Key${options.key.toUpperCase()}`,
+    target: options.target ?? document.body,
+    ctrlKey: options.ctrlKey ?? false,
+    metaKey: options.metaKey ?? false,
+    shiftKey: options.shiftKey ?? false,
+    altKey: options.altKey ?? false,
+    repeat: options.repeat ?? false,
+    isComposing: options.isComposing ?? false,
+    isTrusted: options.isTrusted ?? true,
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  };
+  return event;
+}
+
+function capturedKeydown(spy: ReturnType<typeof vi.spyOn>) {
+  const call = spy.mock.calls.find((args: unknown[]) => args[0] === "keydown" && args[2] === true);
+  expect(call).toBeDefined();
+  return call?.[1] as (event: KeyboardEvent) => void;
+}
+
+function sentKeys() {
+  return vi.mocked(window.parent.postMessage).mock.calls
+    .map(([data]) => data as { type: string; payload: unknown })
+    .filter(({ type }) => type === "not3/draw/keys/1/keydown");
+}
 
 afterEach(() => {
   cleanup();
@@ -260,5 +306,252 @@ describe("cowork bridge", () => {
     expect(window.parent.postMessage).toHaveBeenCalledWith({
       type: "not3/draw/change", payload: [element("local", 2)],
     }, "*");
+  });
+});
+
+describe("draw key bridge", () => {
+  it("delivers replay to the Excalidraw key handler", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "ctrl+z" } });
+    expect(editor.excalidrawKeydown).toHaveBeenCalledOnce();
+    expect(editor.excalidrawKeydown.mock.lastCall?.[0]).toMatchObject({ key: "z", code: "KeyZ", ctrlKey: true });
+  });
+
+  it("installs capture immediately for an enable received before mount", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App keysEnabled />);
+    expect(capturedKeydown(addListener)).toBeDefined();
+  });
+
+  it("keeps legacy Ctrl+S until a valid parent enable", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    act(() => window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "not3/draw/keys/1/enable" }, source: new MessageChannel().port1,
+    })));
+    expect(addListener.mock.calls.some(([type, , capture]) => type === "keydown" && capture === true)).toBe(false);
+    act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true })));
+    expect(window.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "not3/draw/save" }), "*");
+    message("keys/1/enable");
+    expect(capturedKeydown(addListener)).toBeDefined();
+  });
+
+  it("rejects an enable message with an invalid payload", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable", []);
+    expect(addListener.mock.calls.some(([type, , capture]) => type === "keydown" && capture === true)).toBe(false);
+  });
+
+  it("forwards a normalized stroke with increasing seq and repeat", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    const keydown = capturedKeydown(addListener);
+    const first = nativeKey({ key: "S", code: "KeyS", ctrlKey: true, shiftKey: true });
+    const second = nativeKey({ key: "Escape", code: "Escape", repeat: true });
+    act(() => { keydown(first as unknown as KeyboardEvent); keydown(second as unknown as KeyboardEvent); });
+    expect(first.preventDefault).toHaveBeenCalledOnce();
+    expect(first.stopPropagation).toHaveBeenCalledOnce();
+    expect(sentKeys()).toEqual([
+      { type: "not3/draw/keys/1/keydown", payload: { seq: 1, key: "ctrl+shift+s", repeat: false } },
+      { type: "not3/draw/keys/1/keydown", payload: { seq: 2, key: "escape", repeat: true } },
+    ]);
+  });
+
+  it("uses winctrl for a literal Windows key instead of the primary modifier", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "s", code: "KeyS", metaKey: true }) as unknown as KeyboardEvent));
+    expect(sentKeys()).toEqual([{ type: "not3/draw/keys/1/keydown", payload: { seq: 1, key: "winctrl+s", repeat: false } }]);
+  });
+
+  it.each(["input", "textarea", "contenteditable"])("leaves %s targets alone", (kind) => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    message("keys/1/enable");
+    const target = document.createElement(kind === "contenteditable" ? "span" : kind);
+    if (kind === "contenteditable") target.setAttribute("contenteditable", "true");
+    const child = document.createElement("span");
+    target.append(child);
+    container.append(target);
+    const event = nativeKey({ key: "x", target: child });
+    act(() => capturedKeydown(addListener)(event as unknown as KeyboardEvent));
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(sentKeys()).toHaveLength(0);
+  });
+
+  it.each([
+    { key: "x", isComposing: true },
+    { key: "Control" },
+    { key: "x", isTrusted: false },
+  ])("leaves composition, modifiers, and synthetic keys alone: %o", (options) => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    const event = nativeKey(options);
+    act(() => capturedKeydown(addListener)(event as unknown as KeyboardEvent));
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(sentKeys()).toHaveLength(0);
+  });
+
+  it("applies out-of-order replies in press order", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    const keydown = capturedKeydown(addListener);
+    act(() => { keydown(nativeKey({ key: "a" }) as unknown as KeyboardEvent); keydown(nativeKey({ key: "b" }) as unknown as KeyboardEvent); });
+    message("keys/1/reply", { seq: 2, action: { kind: "draw", command: "draw.tool.rectangle" } });
+    expect(editor.setActiveTool).not.toHaveBeenCalled();
+    message("keys/1/reply", { seq: 1, action: { kind: "draw", command: "draw.tool.ellipse" } });
+    expect(editor.setActiveTool.mock.calls).toEqual([[{ type: "ellipse" }], [{ type: "rectangle" }]]);
+  });
+
+  it("replays after 150 ms and ignores a late reply", () => {
+    vi.useFakeTimers();
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const replayed: string[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => replayed.push((event as KeyboardEvent).key));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    act(() => vi.advanceTimersByTime(149));
+    expect(replayed).toEqual([]);
+    act(() => vi.advanceTimersByTime(1));
+    expect(replayed).toEqual(["x"]);
+    message("keys/1/reply", { seq: 1, action: { kind: "draw", command: "draw.tool.rectangle" } });
+    expect(editor.setActiveTool).not.toHaveBeenCalled();
+  });
+
+  it("preserves native key and code in the local fallback", () => {
+    vi.useFakeTimers();
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const events: KeyboardEvent[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => events.push(event as KeyboardEvent));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "@", code: "Digit2", shiftKey: true }) as unknown as KeyboardEvent));
+    act(() => vi.advanceTimersByTime(150));
+    expect(events.map(({ key, code, shiftKey }) => ({ key, code, shiftKey }))).toEqual([
+      { key: "@", code: "Digit2", shiftKey: true },
+    ]);
+  });
+
+  it("replays synthetic keydown and keyup with code and modifier flags", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const events: KeyboardEvent[] = [];
+    for (const type of ["keydown", "keyup"]) container.firstElementChild?.addEventListener(type, (event) => events.push(event as KeyboardEvent));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "z" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "ctrl+shift+y" } });
+    expect(events.map(({ type, key, code, ctrlKey, shiftKey, isTrusted }) => ({ type, key, code, ctrlKey, shiftKey, isTrusted }))).toEqual([
+      { type: "keydown", key: "Y", code: "KeyY", ctrlKey: true, shiftKey: true, isTrusted: false },
+      { type: "keyup", key: "Y", code: "KeyY", ctrlKey: true, shiftKey: true, isTrusted: false },
+    ]);
+    expect(sentKeys()).toHaveLength(1);
+  });
+
+  it("replays shifted punctuation with its browser key value", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const events: KeyboardEvent[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => events.push(event as KeyboardEvent));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "shift+/" } });
+    expect(events.map(({ key, code, shiftKey }) => ({ key, code, shiftKey }))).toEqual([
+      { key: "?", code: "Slash", shiftKey: true },
+    ]);
+  });
+
+  it("replays function and numpad keys with browser key and code values", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const events: KeyboardEvent[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => events.push(event as KeyboardEvent));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "f1 numpad0" } });
+    expect(events.map(({ key, code }) => ({ key, code }))).toEqual([
+      { key: "F1", code: "F1" }, { key: "0", code: "Numpad0" },
+    ]);
+  });
+
+  it("replays both strokes of a draw.key chord in order", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const events: string[] = [];
+    for (const type of ["keydown", "keyup"]) container.firstElementChild?.addEventListener(type, (event) => events.push(`${event.type}:${(event as KeyboardEvent).key}`));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "ctrl+k ctrl+s" } });
+    expect(events).toEqual(["keydown:k", "keyup:k", "keydown:s", "keyup:s"]);
+    expect(window.parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "not3/draw/save" }), "*");
+  });
+
+  it("executes an allowed tool and ignores an unknown draw command", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    const keydown = capturedKeydown(addListener);
+    act(() => { keydown(nativeKey({ key: "x" }) as unknown as KeyboardEvent); keydown(nativeKey({ key: "y" }) as unknown as KeyboardEvent); });
+    message("keys/1/reply", { seq: 1, action: { kind: "draw", command: "draw.tool.rectangle" } });
+    message("keys/1/reply", { seq: 2, action: { kind: "draw", command: "draw.dangerous" } });
+    expect(editor.setActiveTool.mock.calls).toEqual([[{ type: "rectangle" }]]);
+    expect(editor.updateScene).not.toHaveBeenCalled();
+    expect(editor.getAppState).not.toHaveBeenCalled();
+  });
+
+  it("ignores malformed and foreign replies until the local fallback", () => {
+    vi.useFakeTimers();
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container } = render(<App />);
+    const replayed: string[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => replayed.push((event as KeyboardEvent).key));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: "1", action: { kind: "draw", command: "draw.tool.rectangle" } });
+    act(() => window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "not3/draw/keys/1/reply", payload: { seq: 1, action: { kind: "draw", command: "draw.tool.rectangle" } } },
+      source: new MessageChannel().port1,
+    })));
+    act(() => vi.advanceTimersByTime(150));
+    expect(replayed).toEqual(["x"]);
+    expect(editor.setActiveTool).not.toHaveBeenCalled();
+  });
+
+  it("routes zoom, grid, theme, and scroll commands through the public API", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    const keydown = capturedKeydown(addListener);
+    for (const command of ["draw.zoomIn", "draw.zoomOut", "draw.zoomReset", "draw.toggleGrid", "draw.toggleTheme", "draw.scrollToContent"]) {
+      const seq = sentKeys().length + 1;
+      act(() => keydown(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+      message("keys/1/reply", { seq, action: { kind: "draw", command } });
+    }
+    expect(editor.updateScene).toHaveBeenCalledWith({ appState: { zoom: { value: 1.1 } } });
+    expect(editor.updateScene).toHaveBeenCalledWith({ appState: { zoom: { value: 1 } } });
+    expect(editor.updateScene).toHaveBeenCalledWith({ appState: { gridModeEnabled: true } });
+    expect(editor.updateScene).toHaveBeenCalledWith({ appState: { theme: "light" } });
+    expect(editor.scrollToContent).toHaveBeenCalledOnce();
+  });
+
+  it("clears pending key fallbacks when unmounted", () => {
+    vi.useFakeTimers();
+    const addListener = vi.spyOn(window, "addEventListener");
+    const { container, unmount } = render(<App />);
+    const replayed: string[] = [];
+    container.firstElementChild?.addEventListener("keydown", (event) => replayed.push((event as KeyboardEvent).key));
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    unmount();
+    act(() => vi.advanceTimersByTime(150));
+    expect(replayed).toEqual([]);
   });
 });
