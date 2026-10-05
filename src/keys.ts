@@ -152,8 +152,9 @@ export function installDrawKeys(
   }
 
   function replayStroke(init: KeyInit) {
-    container.dispatchEvent(new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true }));
-    container.dispatchEvent(new KeyboardEvent("keyup", { ...init, bubbles: true, cancelable: true }));
+    const target = container.querySelector(".excalidraw-container") ?? container;
+    target.dispatchEvent(new KeyboardEvent("keydown", { ...init, bubbles: true, cancelable: true }));
+    target.dispatchEvent(new KeyboardEvent("keyup", { ...init, bubbles: true, cancelable: true }));
   }
 
   function drain() {

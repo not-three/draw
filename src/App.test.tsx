@@ -18,6 +18,7 @@ const editor = vi.hoisted(() => ({
   setActiveTool: vi.fn(),
   scrollToContent: vi.fn(),
   getAppState: vi.fn(),
+  excalidrawKeydown: vi.fn(),
   appState: { zoom: { value: 1 }, gridModeEnabled: false, theme: "dark" },
 }));
 
@@ -43,7 +44,7 @@ vi.mock("@excalidraw/excalidraw", () => ({
     };
     editor.api = api;
     if (!editor.deferApi) props.excalidrawAPI(api);
-    return null;
+    return <div className="excalidraw-container" onKeyDown={(event) => editor.excalidrawKeydown(event.nativeEvent)} />;
   },
 }));
 
@@ -71,6 +72,7 @@ beforeEach(() => {
   editor.setActiveTool.mockClear();
   editor.scrollToContent.mockClear();
   editor.getAppState.mockClear();
+  editor.excalidrawKeydown.mockClear();
   editor.appState = { zoom: { value: 1 }, gridModeEnabled: false, theme: "dark" };
   vi.spyOn(window.parent, "postMessage").mockImplementation(() => {});
 });
@@ -308,6 +310,16 @@ describe("cowork bridge", () => {
 });
 
 describe("draw key bridge", () => {
+  it("delivers replay to the Excalidraw key handler", () => {
+    const addListener = vi.spyOn(window, "addEventListener");
+    render(<App />);
+    message("keys/1/enable");
+    act(() => capturedKeydown(addListener)(nativeKey({ key: "x" }) as unknown as KeyboardEvent));
+    message("keys/1/reply", { seq: 1, action: { kind: "replay", key: "ctrl+z" } });
+    expect(editor.excalidrawKeydown).toHaveBeenCalledOnce();
+    expect(editor.excalidrawKeydown.mock.lastCall?.[0]).toMatchObject({ key: "z", code: "KeyZ", ctrlKey: true });
+  });
+
   it("installs capture immediately for an enable received before mount", () => {
     const addListener = vi.spyOn(window, "addEventListener");
     render(<App keysEnabled />);
