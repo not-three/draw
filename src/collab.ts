@@ -14,14 +14,13 @@ export function reconcile(elements: readonly ExcalidrawElement[], incoming: read
     const current = byId.get(element.id);
     byId.set(element.id, current ? preferred(current, element) : element);
   }
-  // Excalidraw treats array order as stacking order. Fractional indices are
-  // authoritative for indexed elements; unindexed elements keep scene order.
+  // Excalidraw treats array order as stacking order. All peers must order
+  // legacy unindexed elements the same way regardless of arrival order.
   return [...byId.values()].sort((a, b) => {
-    if (a.index != null && b.index != null) {
-      if (a.index !== b.index) return a.index < b.index ? -1 : 1;
-      if (a.id !== b.id) return a.id < b.id ? -1 : 1;
-    }
-    return 0;
+    if (a.index == null && b.index != null) return 1;
+    if (a.index != null && b.index == null) return -1;
+    if (a.index != null && b.index != null && a.index !== b.index) return a.index < b.index ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
 

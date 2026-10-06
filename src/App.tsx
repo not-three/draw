@@ -23,6 +23,11 @@ type Pointer = { pointer: { x: number; y: number } | null; selected: string[] };
 
 const EMPTY_ELEMENTS: ExcalidrawElement[] = [];
 
+function sceneNeedsUpdate(live: readonly ExcalidrawElement[], merged: readonly ExcalidrawElement[]) {
+  return live.length !== merged.length || diff(live, merged).length > 0 ||
+    live.some((element, index) => element.id !== merged[index].id);
+}
+
 function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false, keysEnabled = false }: AppProps) {
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -102,7 +107,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false, keysEnabled
           // Remote elements belong to the delta baseline, so updateScene's
           // onChange callback cannot send them back as local edits.
           emittedRef.current = reconcile(emittedRef.current, payload.elements);
-          if (diff(live, merged).length > 0) apiRef.current?.updateScene({
+          if (sceneNeedsUpdate(live, merged)) apiRef.current?.updateScene({
             elements: merged,
             captureUpdate: CaptureUpdateAction.NEVER,
           });
@@ -170,7 +175,7 @@ function App({ initialElements = EMPTY_ELEMENTS, isReadonly = false, keysEnabled
           const live = api.getSceneElementsIncludingDeleted();
           const merged = reconcile(live, elementsRef.current);
           elementsRef.current = merged;
-          if (diff(live, merged).length > 0) api.updateScene({
+          if (sceneNeedsUpdate(live, merged)) api.updateScene({
             elements: merged,
             captureUpdate: CaptureUpdateAction.NEVER,
           });
