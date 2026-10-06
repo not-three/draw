@@ -8,6 +8,11 @@ const element = (id: string, version: number, versionNonce: number, isDeleted = 
 const indexedElement = (id: string, index: string, version = 1, versionNonce = 1) =>
   ({ id, index, version, versionNonce, isDeleted: false }) as ExcalidrawElement;
 
+const legacyElement = (id: string) =>
+  ({ id, index: null, version: 1, versionNonce: 1, isDeleted: false }) as ExcalidrawElement;
+
+const ids = (elements: ExcalidrawElement[]) => elements.map((item) => item.id);
+
 describe("reconcile", () => {
   it("keeps the higher version", () => {
     expect(reconcile([element("a", 3, 9)], [element("a", 2, 1)])).toEqual([element("a", 3, 9)]);
@@ -40,6 +45,37 @@ describe("reconcile", () => {
     const front = indexedElement("a", "a1");
     const updatedFront = indexedElement("a", "a1", 2);
     expect(reconcile([back, front], [updatedFront])).toEqual([back, updatedFront]);
+  });
+
+  it("orders the reported mixed legacy scenes identically on both peers", () => {
+    const unknown = legacyElement("u");
+    const low = indexedElement("l", "a1");
+    const high = indexedElement("h", "a2");
+    expect([
+      ids(reconcile([unknown, high], [low])),
+      ids(reconcile([low], [high, unknown])),
+    ]).toEqual([["l", "h", "u"], ["l", "h", "u"]]);
+  });
+
+  it("sorts fractional indices before element IDs", () => {
+    const low = indexedElement("z", "a1");
+    const high = indexedElement("a", "a2");
+    expect(ids(reconcile([high], [low]))).toEqual(["z", "a"]);
+    expect(ids(reconcile([low], [high]))).toEqual(["z", "a"]);
+  });
+
+  it("sorts equal indices by element ID regardless of arrival order", () => {
+    const a = indexedElement("a", "a1");
+    const z = indexedElement("z", "a1");
+    expect(ids(reconcile([z], [a]))).toEqual(["a", "z"]);
+    expect(ids(reconcile([a], [z]))).toEqual(["a", "z"]);
+  });
+
+  it("sorts two null indices by element ID regardless of arrival order", () => {
+    const a = legacyElement("a");
+    const z = legacyElement("z");
+    expect(ids(reconcile([z], [a]))).toEqual(["a", "z"]);
+    expect(ids(reconcile([a], [z]))).toEqual(["a", "z"]);
   });
 });
 
