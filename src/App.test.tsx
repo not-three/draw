@@ -51,6 +51,12 @@ vi.mock("@excalidraw/excalidraw", () => ({
 const element = (id: string, version: number, versionNonce = 1) =>
   ({ id, version, versionNonce, isDeleted: false }) as ExcalidrawElement;
 
+const indexedElement = (id: string, index: string) =>
+  ({ id, index, version: 1, versionNonce: 1, isDeleted: false }) as ExcalidrawElement;
+
+const legacyElement = (id: string) =>
+  ({ id, index: null, version: 1, versionNonce: 1, isDeleted: false }) as ExcalidrawElement;
+
 function message(type: string, payload: unknown = {}) {
   act(() => window.dispatchEvent(new MessageEvent("message", {
     data: { type: `not3/draw/${type}`, payload }, source: window.parent,
@@ -209,6 +215,42 @@ describe("cowork bridge", () => {
     message("collab/elements", { elements: [element("remote", 2)] });
     act(() => vi.advanceTimersByTime(100));
     expect(window.parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "not3/draw/collab/delta" }), "*");
+  });
+
+  it("applies an order-only remote scene and does not echo it", () => {
+    vi.useFakeTimers();
+    editor.echoOnUpdate = true;
+    const unknown = legacyElement("u");
+    const low = indexedElement("l", "a1");
+    const high = indexedElement("h", "a2");
+    render(<App />);
+    changes([unknown, high, low]);
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    message("collab/elements", { elements: [low, high, unknown] });
+    expect(editor.updateScene).toHaveBeenCalledWith(expect.objectContaining({
+      elements: [low, high, unknown],
+      captureUpdate: "NEVER",
+    }));
+    act(() => vi.advanceTimersByTime(100));
+    expect(window.parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: "not3/draw/collab/delta" }), "*");
+  });
+
+  it("orders local deltas and full-scene replies with the same legacy rule", () => {
+    vi.useFakeTimers();
+    const unknown = legacyElement("u");
+    const low = indexedElement("l", "a1");
+    const high = indexedElement("h", "a2");
+    render(<App />);
+    message("collab/start", { self: { id: "me", name: "Me", color: "#123" } });
+    changes([unknown, high, low]);
+    act(() => vi.advanceTimersByTime(34));
+    expect(window.parent.postMessage).toHaveBeenCalledWith({
+      type: "not3/draw/collab/delta", payload: { elements: [low, high, unknown] },
+    }, "*");
+    message("collab/scene-request");
+    expect(window.parent.postMessage).toHaveBeenCalledWith({
+      type: "not3/draw/collab/scene", payload: { elements: [low, high, unknown] },
+    }, "*");
   });
 
   it("coalesces changed elements into no more than 30 deltas per second", () => {
