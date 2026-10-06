@@ -19,11 +19,11 @@ jobs:
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install node
         if: github.event.action != 'closed'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -33,7 +33,7 @@ jobs:
 
       - name: Label the PR
         if: github.event.action != 'closed'
-        uses: actions/labeler@v6
+        uses: actions/labeler@v7
 
       - name: Install dependencies
         if: github.event.action != 'closed'
